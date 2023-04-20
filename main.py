@@ -111,7 +111,7 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "images", metavar="N", type=str, nargs="*", help="A list of images to process."
+        "images", metavar="N", type=str, nargs="*", help="A list of paths to images to process."
     )
 
     parser.add_argument(
