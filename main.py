@@ -28,20 +28,21 @@ def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
         rr.set_time_sequence("image", n)
         image, image_tensor = load_image(image_uri)
         predictor.set_image(image)
-        for prompt in args.prompts:
-            # run grounding dino model
-            logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
-            boxes_filt, pred_phrases = get_grounding_output(
-                model, image_tensor, prompt, 0.3, 0.25, device=args.device
-            )
-            # denormalize boxes (from [0, 1] to image size)
-            H, W, _ = image.shape
-            for i in range(boxes_filt.size(0)):
-                boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
-                boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
-                boxes_filt[i][2:] += boxes_filt[i][:2]
+        prompt = args.prompt
+        # run grounding dino model
+        logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
+        boxes_filt, box_phrases = get_grounding_output(
+            model, image_tensor, prompt, 0.3, 0.25, device=args.device
+        )
+        logging.info(f"Grounded output with prediction phrases: {box_phrases}")
+        # denormalize boxes (from [0, 1] to image size)
+        H, W, _ = image.shape
+        for i in range(boxes_filt.size(0)):
+            boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
+            boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
+            boxes_filt[i][2:] += boxes_filt[i][:2]
 
-            run_segmentation(predictor, image, boxes_filt, prompt)
+        run_segmentation(predictor, image, boxes_filt, box_phrases)
 
 
 def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
@@ -68,6 +69,7 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
             boxes_filt, pred_phrases = get_grounding_output(
                 model, image_tensor, prompt, 0.3, 0.25, device=args.device
             )
+            logging.info(f"Grounded output with prediction phrases: {pred_phrases}")
             # denormalize boxes (from [0, 1] to image size)
             H, W, _ = rgb.shape
             for i in range(boxes_filt.size(0)):
@@ -103,9 +105,8 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "--prompts",
-        default=["tires", "windows"],
-        nargs="+",
+        "--prompt",
+        default="tires and windows",
         type=str,
         help="List of prompts to use for bounding box detection.",
     )

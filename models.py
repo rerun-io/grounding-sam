@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Final, Tuple
+from typing import Final, List, Tuple
 from urllib.parse import urlparse
 
 import cv2
@@ -85,7 +85,7 @@ def create_sam(model: str, device: str) -> Sam:
 
 
 def run_segmentation(
-    predictor: SamPredictor, image: Mat, boxes_filt, prompt: str
+    predictor: SamPredictor, image: Mat, boxes_filt, box_phrases: List[str]
 ) -> None:
     """Run segmentation on a single image."""
     rr.log_image("image", image)
@@ -103,34 +103,38 @@ def run_segmentation(
         multimask_output=False,
     )
 
+    
+
     logging.info("Found {} masks".format(len(masks)))
     # mask_tensor = masks.squeeze().numpy().astype("uint8") * 128
     # rr.log_tensor(f"query_{idx}/mask_tensor", mask_tensor)
 
     # TODO(jleibs): we could instead draw each mask as a separate image layer, but the current layer-stacking
     # does not produce great results.
-    masks_with_ids = list(enumerate(masks.cpu(), start=1))
+    id_from_phrase = {phrase: i for i, phrase in enumerate(set(box_phrases))}
+    mask_ids = [id_from_phrase[phrase] for phrase in box_phrases]  # One mask per box
 
-    # Work-around for https://github.com/rerun-io/rerun/issues/1782
     # Make sure we have an AnnotationInfo present for every class-id used in this image
-    # TODO(jleibs): Remove when fix is released
     rr.log_annotation_context(
         "image",
-        [rr.AnnotationInfo(id) for id, _ in masks_with_ids],
+        [rr.AnnotationInfo(id=id, label=phrase) 
+         for phrase, id in id_from_phrase.items()],
         timeless=False,
     )
 
-    # Layer all of the masks together, using the id as class-id in the segmentation
-    segmentation_img = np.zeros((image.shape[0], image.shape[1]))
-    for id, m in masks_with_ids:
-        segmentation_img[m.squeeze()] = id
+    # Layer all of the masks that belong to a single phrase together
+    for phrase, id in id_from_phrase.items():
+        segmentation_img = np.zeros((image.shape[0], image.shape[1]))
+        for mask_id, mask in zip(mask_ids, masks):
+            if mask_id == id:
+                segmentation_img[mask.squeeze()] = id
 
-    rr.log_segmentation_image(f"image/{prompt}/masks", segmentation_img)
+        rr.log_segmentation_image(f"image/{phrase}/mask", segmentation_img)
 
     rr.log_rects(
-        f"image/{prompt}/boxes",
+        "image/boxes",
         rects=boxes_filt.numpy(),
-        class_ids=[id for id, _ in masks_with_ids],
+        class_ids=mask_ids,
         rect_format=RectFormat.XYXY,
     )
 
@@ -213,7 +217,7 @@ def get_grounding_output(
     caption: str,
     box_threshold: float,
     text_threshold: float,
-    with_logits: bool = True,
+    with_logits: bool = False,
     device: str = "cpu",
 ):
     caption = caption.lower()
