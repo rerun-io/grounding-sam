@@ -27,3 +27,9 @@ python main.py
 
 Use `--help` to understand argparse inputs
 
+To use video input ([here is an example video to download](https://www.pexels.com/video/nature-woman-dog-path-4143804/)) use the following command
+
+```
+python main.py --video-path <PATH TO YOUR VIDEO FILE> --prompts "<YOUR CHOSEN PROMPT 1>" "<YOUR CHOSEN PROMPT 2>"
+```
+
