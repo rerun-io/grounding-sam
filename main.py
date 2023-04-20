@@ -23,7 +23,7 @@ from segment_anything.modeling import Sam
 from groundingdino.models import GroundingDINO
 
 
-def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
+def log_images_segmentation(args, model: GroundingDINO, predictor: Sam, ann_dict: dict[str, int]):
     for n, image_uri in enumerate(args.images):
         rr.set_time_sequence("image", n)
         image, image_tensor = load_image(image_uri)
@@ -41,10 +41,10 @@ def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
                 boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
                 boxes_filt[i][2:] += boxes_filt[i][:2]
 
-            run_segmentation(predictor, image, boxes_filt, prompt)
+            run_segmentation(predictor, image, boxes_filt, prompt, ann_dict)
 
 
-def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
+def log_video_segmentation(args, model: GroundingDINO, predictor: Sam, ann_dict: dict[str, int]):
     video_path = args.video_path
     assert video_path.exists()
     cap = cv2.VideoCapture(str(video_path))
@@ -76,7 +76,7 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
                 boxes_filt[i][2:] += boxes_filt[i][:2]
 
             
-            run_segmentation(predictor, rgb, boxes_filt, prompt)
+            run_segmentation(predictor, rgb, boxes_filt, prompt, ann_dict)
 
         idx += 1
 
@@ -142,6 +142,14 @@ def main() -> None:
 
     predictor = SamPredictor(sam)
 
+    # generate a dictionary of annotation ids to prompts
+    ann_dict = {prompt:ann_id for ann_id, prompt in enumerate(args.prompts, start=1)}
+    rr.log_annotation_context(
+        "image",
+        [rr.AnnotationInfo(id=ann_id, label=prompt) for prompt, ann_id in ann_dict.items()],
+        timeless=True,
+    )
+
     if len(args.images) == 0 and args.video_path is None:
         logging.info("No image provided. Using default.")
         args.images = [
@@ -149,9 +157,9 @@ def main() -> None:
         ]
 
     if len(args.images) > 0:
-        log_images_segmentation(args, model, predictor)
+        log_images_segmentation(args, model, predictor, ann_dict)
     elif args.video_path is not None:
-        log_video_segmentation(args, model, predictor)
+        log_video_segmentation(args, model, predictor, ann_dict)
 
     rr.script_teardown(args)
 

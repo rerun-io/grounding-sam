@@ -85,7 +85,7 @@ def create_sam(model: str, device: str) -> Sam:
 
 
 def run_segmentation(
-    predictor: SamPredictor, image: Mat, boxes_filt, prompt: str
+    predictor: SamPredictor, image: Mat, boxes_filt, prompt: str, ann_dict: dict[str, int]
 ) -> None:
     """Run segmentation on a single image."""
     rr.log_image("image", image)
@@ -107,30 +107,17 @@ def run_segmentation(
     # mask_tensor = masks.squeeze().numpy().astype("uint8") * 128
     # rr.log_tensor(f"query_{idx}/mask_tensor", mask_tensor)
 
-    # TODO(jleibs): we could instead draw each mask as a separate image layer, but the current layer-stacking
-    # does not produce great results.
-    masks_with_ids = list(enumerate(masks.cpu(), start=1))
-
-    # Work-around for https://github.com/rerun-io/rerun/issues/1782
-    # Make sure we have an AnnotationInfo present for every class-id used in this image
-    # TODO(jleibs): Remove when fix is released
-    rr.log_annotation_context(
-        "image",
-        [rr.AnnotationInfo(id) for id, _ in masks_with_ids],
-        timeless=False,
-    )
-
     # Layer all of the masks together, using the id as class-id in the segmentation
     segmentation_img = np.zeros((image.shape[0], image.shape[1]))
-    for id, m in masks_with_ids:
-        segmentation_img[m.squeeze()] = id
+    for mask in masks:
+        segmentation_img[mask.squeeze()] = ann_dict[prompt]
 
     rr.log_segmentation_image(f"image/{prompt}/masks", segmentation_img)
 
     rr.log_rects(
         f"image/{prompt}/boxes",
         rects=boxes_filt.numpy(),
-        class_ids=[id for id, _ in masks_with_ids],
+        class_ids=[ann_dict[prompt] for _ in range(boxes_filt.shape[0])],
         rect_format=RectFormat.XYXY,
     )
 
