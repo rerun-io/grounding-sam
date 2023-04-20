@@ -26,31 +26,54 @@ from groundingdino.models import GroundingDINO
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     for n, image_uri in enumerate(args.images):
         rr.set_time_sequence("image", n)
-        image, image_tensor = load_image(image_uri)
-        predictor.set_image(image)
-        prompt = args.prompt
-        # run grounding dino model
-        logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
-        boxes_filt, box_phrases = get_grounding_output(
-            model, image_tensor, prompt, 0.3, 0.25, device=args.device
-        )
-        logging.info(f"Grounded output with prediction phrases: {box_phrases}")
-        # denormalize boxes (from [0, 1] to image size)
-        H, W, _ = image.shape
-        for i in range(boxes_filt.size(0)):
-            boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
-            boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
-            boxes_filt[i][2:] += boxes_filt[i][:2]
+        image = load_image(image_uri)
+        rr.log_image("image", image)
 
-        run_segmentation(predictor, image, boxes_filt, box_phrases)
+        detections, phrases, id_from_phrase = grounding_dino_detect(model, args.device, image, args.prompt)
+
+        predictor.set_image(image)
+        run_segmentation(predictor, image, detections, phrases, id_from_phrase)
+
+def grounding_dino_detect(model, device, image, prompt):
+    image_tensor = image_to_tensor(image)
+    logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
+    boxes_filt, box_phrases = get_grounding_output(
+            model, image_tensor, prompt, 0.3, 0.25, device=device
+        )
+    logging.info(f"Grounded output with prediction phrases: {box_phrases}")
+    
+    # denormalize boxes (from [0, 1] to image size)
+    H, W, _ = image.shape
+    for i in range(boxes_filt.size(0)):
+        boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
+        boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
+        boxes_filt[i][2:] += boxes_filt[i][:2]
+
+    id_from_phrase = {phrase: i for i, phrase in enumerate(set(box_phrases), start=1)}
+    box_ids = [id_from_phrase[phrase] for phrase in box_phrases]  # One mask per box
+
+    # Make sure we have an AnnotationInfo present for every class-id used in this image
+    rr.log_annotation_context(
+        "image",
+        [rr.AnnotationInfo(id=id, label=phrase) 
+         for phrase, id in id_from_phrase.items()],
+        timeless=False,
+    )
+
+    rr.log_rects(
+        "image/detections",
+        rects=boxes_filt.numpy(),
+        class_ids=box_ids,
+        rect_format=rr.RectFormat.XYXY,
+    )
+
+    return boxes_filt, box_phrases, id_from_phrase
 
 
 def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
     video_path = args.video_path
     assert video_path.exists()
     cap = cv2.VideoCapture(str(video_path))
-
-    prompt = args.prompts
 
     idx = 0
     while cap.isOpened():
@@ -60,25 +83,12 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rr.set_time_sequence("frame", idx)
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         rgb = resize_img(rgb, 512)
-        image_tensor = image_to_tensor(rgb)
-        predictor.set_image(rgb)
+        rr.log_image("image", rgb)
         
-        for prompt in args.prompts:    
-            # run grounding dino model
-            logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
-            boxes_filt, pred_phrases = get_grounding_output(
-                model, image_tensor, prompt, 0.3, 0.25, device=args.device
-            )
-            logging.info(f"Grounded output with prediction phrases: {pred_phrases}")
-            # denormalize boxes (from [0, 1] to image size)
-            H, W, _ = rgb.shape
-            for i in range(boxes_filt.size(0)):
-                boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
-                boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
-                boxes_filt[i][2:] += boxes_filt[i][:2]
+        detections, phrases, id_from_phrase = grounding_dino_detect(model, args.device, rgb, args.prompt)
 
-            
-            run_segmentation(predictor, rgb, boxes_filt, prompt)
+        predictor.set_image(rgb)
+        run_segmentation(predictor, rgb, detections, phrases, id_from_phrase)
 
         idx += 1
 

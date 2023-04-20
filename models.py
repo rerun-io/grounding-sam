@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Final, List, Tuple
+from typing import Final, List, Mapping
 from urllib.parse import urlparse
 
 import cv2
@@ -85,15 +85,14 @@ def create_sam(model: str, device: str) -> Sam:
 
 
 def run_segmentation(
-    predictor: SamPredictor, image: Mat, boxes_filt, box_phrases: List[str]
+    predictor: SamPredictor, image: Mat, detections, phrases: List[str], id_from_phrase: Mapping[str, int]
 ) -> None:
     """Run segmentation on a single image."""
-    rr.log_image("image", image)
-    if boxes_filt.shape[0] == 0:
+    if detections.shape[0] == 0:
         return
     logging.info("Finding masks")
     transformed_boxes = predictor.transform.apply_boxes_torch(
-        boxes_filt, image.shape[:2]
+        detections, image.shape[:2]
     )
 
     masks, _, _ = predictor.predict_torch(
@@ -103,40 +102,17 @@ def run_segmentation(
         multimask_output=False,
     )
 
-    
 
     logging.info("Found {} masks".format(len(masks)))
-    # mask_tensor = masks.squeeze().numpy().astype("uint8") * 128
-    # rr.log_tensor(f"query_{idx}/mask_tensor", mask_tensor)
-
-    # TODO(jleibs): we could instead draw each mask as a separate image layer, but the current layer-stacking
-    # does not produce great results.
-    id_from_phrase = {phrase: i for i, phrase in enumerate(set(box_phrases))}
-    mask_ids = [id_from_phrase[phrase] for phrase in box_phrases]  # One mask per box
-
-    # Make sure we have an AnnotationInfo present for every class-id used in this image
-    rr.log_annotation_context(
-        "image",
-        [rr.AnnotationInfo(id=id, label=phrase) 
-         for phrase, id in id_from_phrase.items()],
-        timeless=False,
-    )
 
     # Layer all of the masks that belong to a single phrase together
-    for phrase, id in id_from_phrase.items():
-        segmentation_img = np.zeros((image.shape[0], image.shape[1]))
-        for mask_id, mask in zip(mask_ids, masks):
-            if mask_id == id:
-                segmentation_img[mask.squeeze()] = id
+    segmentation_img = np.zeros((image.shape[0], image.shape[1]))
+    for phrase, mask in zip(phrases, masks):
+        segmentation_img[mask.squeeze()] = id_from_phrase[phrase]
 
-        rr.log_segmentation_image(f"image/{phrase}/mask", segmentation_img)
+    rr.log_segmentation_image(f"image/segmentation", segmentation_img)
 
-    rr.log_rects(
-        "image/boxes",
-        rects=boxes_filt.numpy(),
-        class_ids=mask_ids,
-        rect_format=RectFormat.XYXY,
-    )
+    
 
 
 def is_url(path: str) -> bool:
@@ -183,7 +159,7 @@ def image_to_tensor(image: Mat) -> torch.Tensor:
     return image_tensor
 
 
-def load_image(image_uri: str) -> Tuple[Mat, torch.Tensor]:
+def load_image(image_uri: str) -> Mat:
     """Conditionally download an image from URL or load it from disk."""
     logging.info("Loading: {}".format(image_uri))
     if is_url(image_uri):
@@ -195,8 +171,8 @@ def load_image(image_uri: str) -> Tuple[Mat, torch.Tensor]:
         image = cv2.imread(image_uri, cv2.IMREAD_COLOR)
 
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image_tensor = image_to_tensor(image)
-    return image, image_tensor
+    
+    return image
 
 
 def load_grounding_model(
