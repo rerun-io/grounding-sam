@@ -26,8 +26,9 @@ from groundingdino.models import GroundingDINO
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     for n, image_uri in enumerate(args.images):
         rr.set_time_sequence("image", n)
+        image, image_tensor = load_image(image_uri)
+        predictor.set_image(image)
         for prompt in args.prompts:
-            image, image_tensor = load_image(image_uri)
             # run grounding dino model
             logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
             boxes_filt, pred_phrases = get_grounding_output(
@@ -40,7 +41,6 @@ def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
                 boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
                 boxes_filt[i][2:] += boxes_filt[i][:2]
 
-            predictor.set_image(image)
             run_segmentation(predictor, image, boxes_filt, prompt)
 
 
@@ -59,9 +59,10 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rr.set_time_sequence("frame", idx)
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         rgb = resize_img(rgb, 512)
-
-        for prompt in args.prompts:
-            image_tensor = image_to_tensor(rgb)
+        image_tensor = image_to_tensor(rgb)
+        predictor.set_image(rgb)
+        
+        for prompt in args.prompts:    
             # run grounding dino model
             logging.info(f"Running GroundedDINO with DETECTION PROMPT {prompt}.")
             boxes_filt, pred_phrases = get_grounding_output(
@@ -74,7 +75,7 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
                 boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
                 boxes_filt[i][2:] += boxes_filt[i][:2]
 
-            predictor.set_image(rgb)
+            
             run_segmentation(predictor, rgb, boxes_filt, prompt)
 
         idx += 1
