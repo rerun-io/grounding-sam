@@ -1,5 +1,5 @@
 # grounding-sam-rerun
-<video controls autoplay src="https://user-images.githubusercontent.com/25287427/232924460-e544d85a-441b-45bb-af4b-5c72499b1f24.mp4
+<video controls autoplay src="https://user-images.githubusercontent.com/25287427/233673259-8a0743e7-8e80-4929-91b9-8dfbd9dbbba9.mp4
 " controls="controls" style="max-width: 730px;"></video>
 
 This repository uses [GroundingDINO](https://github.com/IDEA-Research/GroundingDINO) to generate bounding boxes using natural language which are then fed into MetaAI's [Segment Anything Model](https://github.com/facebookresearch/segment-anything) and visualized using [rerun](https://www.rerun.io/)
@@ -28,7 +28,7 @@ python main.py
 Use `--help` to understand argparse inputs
 To use video input ([here is an example video to download](https://www.pexels.com/video/nature-woman-dog-path-4143804/)) use the following command
 
-"""
+```
 python main.py --video-path <PATH TO YOUR VIDEO FILE> --prompts "<YOUR CHOSEN PROMPT>"
-"""
+```
 
