@@ -108,7 +108,7 @@ def run_segmentation(
     # Layer all of the masks that belong to a single phrase together
     segmentation_img = np.zeros((image.shape[0], image.shape[1]))
     for phrase, mask in zip(phrases, masks):
-        segmentation_img[mask.squeeze()] = id_from_phrase[phrase]
+        segmentation_img[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
 
     rr.log_segmentation_image(f"image/segmentation", segmentation_img)
 
