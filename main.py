@@ -67,16 +67,15 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
         timeless=False,
     )
 
-    for phrase in id_from_phrase:
+    for phrase in box_phrases:
         mask = box_ids == id_from_phrase[phrase]
-        entity_path = f"image/phrases/{phrase}/detections"
-        rr.log_cleared(entity_path)
         rr.log_rects(
-            entity_path,
+            f"image/phrases/{phrase}/detections",
             rects=boxes_filt[mask].numpy(),
             class_ids=box_ids[mask].numpy(),
             rect_format=rr.RectFormat.XYXY,
         )
+
     rr.log_rects(
         "image/detections",
         rects=boxes_filt.numpy(),
@@ -103,6 +102,10 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         rgb = resize_img(rgb, 512)
         rr.log_image("image", rgb)
+
+        for phrase in id_from_phrase:
+            rr.log_cleared(f"image/phrases/{phrase}/segmentation")
+            rr.log_cleared(f"image/phrases/{phrase}/detections")
         
         detections, phrases = grounding_dino_detect(
             model, args.device, rgb, args.prompt, id_from_phrase

@@ -107,9 +107,6 @@ def run_segmentation(
     logging.info("Found {} masks".format(len(masks)))
 
     segmentation_img = np.zeros((image.shape[0], image.shape[1]))
-    for phrase in id_from_phrase:
-        rr.log_cleared(f"image/phrases/{phrase}/segmentation")
-
     phrase_masks = defaultdict(lambda: np.zeros((image.shape[0], image.shape[1])))
 
     for phrase, mask in zip(phrases, masks):
