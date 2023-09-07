@@ -22,6 +22,7 @@ from segment_anything import SamPredictor
 from segment_anything.modeling import Sam
 from groundingdino.models import GroundingDINO
 
+
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     id_from_phrase = {}
     for n, image_uri in enumerate(args.images):
@@ -93,7 +94,9 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rgb = resize_img(rgb, 512)
         rr.log_image("image", rgb)
         
-        detections, phrases = grounding_dino_detect(model, args.device, rgb, args.prompt, id_from_phrase)
+        detections, phrases = grounding_dino_detect(
+            model, args.device, rgb, args.prompt, id_from_phrase
+        )
 
         predictor.set_image(rgb)
         run_segmentation(predictor, rgb, detections, phrases, id_from_phrase)
