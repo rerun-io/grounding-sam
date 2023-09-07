@@ -103,7 +103,10 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rgb = resize_img(rgb, 512)
         rr.log_image("image", rgb)
 
+        # clear everything, otherwise we'll see previous detection while inference runs
         for phrase in id_from_phrase:
+            rr.log_cleared("image/segmentation")
+            rr.log_cleared("image/detections")
             rr.log_cleared(f"image/phrases/{phrase}/segmentation")
             rr.log_cleared(f"image/phrases/{phrase}/detections")
         
