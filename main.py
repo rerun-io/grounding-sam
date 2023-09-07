@@ -22,6 +22,7 @@ from segment_anything import SamPredictor
 from segment_anything.modeling import Sam
 from groundingdino.models import GroundingDINO
 
+ID_FROM_PHRASE = {}
 
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     for n, image_uri in enumerate(args.images):
@@ -49,14 +50,18 @@ def grounding_dino_detect(model, device, image, prompt):
         boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
         boxes_filt[i][2:] += boxes_filt[i][:2]
 
-    id_from_phrase = {phrase: i for i, phrase in enumerate(set(box_phrases), start=1)}
-    box_ids = [id_from_phrase[phrase] for phrase in box_phrases]  # One mask per box
+    for phrase in box_phrases:
+        if phrase not in ID_FROM_PHRASE:
+            num_phrases = len(ID_FROM_PHRASE)
+            ID_FROM_PHRASE[phrase] = num_phrases + 1
+
+    box_ids = [ID_FROM_PHRASE[phrase] for phrase in box_phrases]
 
     # Make sure we have an AnnotationInfo present for every class-id used in this image
     rr.log_annotation_context(
         "image",
-        [rr.AnnotationInfo(id=id, label=phrase) 
-         for phrase, id in id_from_phrase.items()],
+        [rr.AnnotationInfo(id=id, label=phrase)
+         for phrase, id in ID_FROM_PHRASE.items()],
         timeless=False,
     )
 
@@ -67,7 +72,7 @@ def grounding_dino_detect(model, device, image, prompt):
         rect_format=rr.RectFormat.XYXY,
     )
 
-    return boxes_filt, box_phrases, id_from_phrase
+    return boxes_filt, box_phrases
 
 
 def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
@@ -85,10 +90,10 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rgb = resize_img(rgb, 512)
         rr.log_image("image", rgb)
         
-        detections, phrases, id_from_phrase = grounding_dino_detect(model, args.device, rgb, args.prompt)
+        detections, phrases = grounding_dino_detect(model, args.device, rgb, args.prompt)
 
         predictor.set_image(rgb)
-        run_segmentation(predictor, rgb, detections, phrases, id_from_phrase)
+        run_segmentation(predictor, rgb, detections, phrases, ID_FROM_PHRASE)
 
         idx += 1
 
