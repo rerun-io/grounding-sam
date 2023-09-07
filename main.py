@@ -57,7 +57,7 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
             num_phrases = len(id_from_phrase)
             id_from_phrase[phrase] = num_phrases + 1
 
-    box_ids = [id_from_phrase[phrase] for phrase in box_phrases]
+    box_ids = torch.tensor([id_from_phrase[phrase] for phrase in box_phrases])
 
     # Make sure we have an AnnotationInfo present for every class-id used in this image
     rr.log_annotation_context(
@@ -67,10 +67,20 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
         timeless=False,
     )
 
+    for phrase in id_from_phrase:
+        mask = box_ids == id_from_phrase[phrase]
+        entity_path = f"image/phrases/{phrase}/detections"
+        rr.log_cleared(entity_path)
+        rr.log_rects(
+            entity_path,
+            rects=boxes_filt[mask].numpy(),
+            class_ids=box_ids[mask].numpy(),
+            rect_format=rr.RectFormat.XYXY,
+        )
     rr.log_rects(
         "image/detections",
         rects=boxes_filt.numpy(),
-        class_ids=box_ids,
+        class_ids=box_ids.numpy(),
         rect_format=rr.RectFormat.XYXY,
     )
 
