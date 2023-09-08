@@ -1,5 +1,6 @@
 import logging
 import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Final, List, Mapping
 from urllib.parse import urlparse
@@ -105,14 +106,16 @@ def run_segmentation(
 
     logging.info("Found {} masks".format(len(masks)))
 
-    # Layer all of the masks that belong to a single phrase together
     segmentation_img = np.zeros((image.shape[0], image.shape[1]))
+    phrase_masks = defaultdict(lambda: np.zeros((image.shape[0], image.shape[1])))
+
     for phrase, mask in zip(phrases, masks):
+        phrase_mask = phrase_masks[phrase]
         segmentation_img[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
+        phrase_mask[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
+        rr.log_segmentation_image(f"image/phrases/{phrase}/segmentation", phrase_mask)
 
     rr.log_segmentation_image(f"image/segmentation", segmentation_img)
-
-    
 
 
 def is_url(path: str) -> bool:

@@ -22,6 +22,7 @@ from segment_anything import SamPredictor
 from segment_anything.modeling import Sam
 from groundingdino.models import GroundingDINO
 
+
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     id_from_phrase = {}
     for n, image_uri in enumerate(args.images):
@@ -56,7 +57,7 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
             num_phrases = len(id_from_phrase)
             id_from_phrase[phrase] = num_phrases + 1
 
-    box_ids = [id_from_phrase[phrase] for phrase in box_phrases]
+    box_ids = torch.tensor([id_from_phrase[phrase] for phrase in box_phrases])
 
     # Make sure we have an AnnotationInfo present for every class-id used in this image
     rr.log_annotation_context(
@@ -66,10 +67,19 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
         timeless=False,
     )
 
+    for phrase in box_phrases:
+        mask = box_ids == id_from_phrase[phrase]
+        rr.log_rects(
+            f"image/phrases/{phrase}/detections",
+            rects=boxes_filt[mask].numpy(),
+            class_ids=box_ids[mask].numpy(),
+            rect_format=rr.RectFormat.XYXY,
+        )
+
     rr.log_rects(
         "image/detections",
         rects=boxes_filt.numpy(),
-        class_ids=box_ids,
+        class_ids=box_ids.numpy(),
         rect_format=rr.RectFormat.XYXY,
     )
 
@@ -92,8 +102,17 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         rgb = resize_img(rgb, 512)
         rr.log_image("image", rgb)
+
+        # clear everything, otherwise we'll see previous detection while inference runs
+        for phrase in id_from_phrase:
+            rr.log_cleared("image/segmentation")
+            rr.log_cleared("image/detections")
+            rr.log_cleared(f"image/phrases/{phrase}/segmentation")
+            rr.log_cleared(f"image/phrases/{phrase}/detections")
         
-        detections, phrases = grounding_dino_detect(model, args.device, rgb, args.prompt, id_from_phrase)
+        detections, phrases = grounding_dino_detect(
+            model, args.device, rgb, args.prompt, id_from_phrase
+        )
 
         predictor.set_image(rgb)
         run_segmentation(predictor, rgb, detections, phrases, id_from_phrase)
