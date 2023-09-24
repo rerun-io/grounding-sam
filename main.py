@@ -12,6 +12,7 @@ or remote urls. Videos must be local file-paths. Can use multiple prompts.
 import argparse
 import logging
 import rerun as rr
+import rerun.experimental as rr2
 import torch
 import cv2
 from pathlib import Path
@@ -22,13 +23,12 @@ from segment_anything import SamPredictor
 from segment_anything.modeling import Sam
 from groundingdino.models import GroundingDINO
 
-
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     id_from_phrase = {}
     for n, image_uri in enumerate(args.images):
         rr.set_time_sequence("image", n)
         image = load_image(image_uri)
-        rr.log_image("image", image)
+        rr2.log("image", rr2.Image(image))
 
         detections, phrases, id_from_phrase = grounding_dino_detect(
             model, args.device, image, args.prompt, id_from_phrase
@@ -60,27 +60,35 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
     box_ids = torch.tensor([id_from_phrase[phrase] for phrase in box_phrases])
 
     # Make sure we have an AnnotationInfo present for every class-id used in this image
-    rr.log_annotation_context(
+    rr2.log(
         "image",
-        [rr.AnnotationInfo(id=id, label=phrase)
-         for phrase, id in id_from_phrase.items()],
+        rr2.AnnotationContext(
+            [
+                rr.AnnotationInfo(id=id, label=phrase)
+                for phrase, id in id_from_phrase.items()
+            ]
+        ),
         timeless=False,
     )
 
     for phrase in box_phrases:
         mask = box_ids == id_from_phrase[phrase]
-        rr.log_rects(
+        rr2.log(
             f"image/phrases/{phrase}/detections",
-            rects=boxes_filt[mask].numpy(),
-            class_ids=box_ids[mask].numpy(),
-            rect_format=rr.RectFormat.XYXY,
+            rr2.Boxes2D(  # boxes are XYXY format (top left, bottom right)
+                mins=boxes_filt[mask][:, :2],
+                sizes=boxes_filt[mask][:, 2:] - boxes_filt[mask][:, :2],
+                class_ids=box_ids[mask].numpy(),
+            ),
         )
 
-    rr.log_rects(
+    rr2.log(
         "image/detections",
-        rects=boxes_filt.numpy(),
-        class_ids=box_ids.numpy(),
-        rect_format=rr.RectFormat.XYXY,
+        rr2.Boxes2D(
+            mins=boxes_filt[:, :2],
+            sizes=boxes_filt[:, 2:] - boxes_filt[:, :2],
+            class_ids=box_ids.numpy(),
+        )
     )
 
     return boxes_filt, box_phrases
@@ -99,17 +107,16 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         if not ret:
             break
         rr.set_time_sequence("frame", idx)
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        rgb = resize_img(rgb, 512)
-        rr.log_image("image", rgb)
 
         # clear everything, otherwise we'll see previous detection while inference runs
-        for phrase in id_from_phrase:
-            rr.log_cleared("image/segmentation")
-            rr.log_cleared("image/detections")
-            rr.log_cleared(f"image/phrases/{phrase}/segmentation")
-            rr.log_cleared(f"image/phrases/{phrase}/detections")
-        
+        # TODO(roym899) this breaks the segmentation images currently
+        #  https://github.com/rerun-io/rerun/issues/3424
+        # rr2.log("image", rr2.Clear(True))
+
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        rgb = resize_img(rgb, 512)
+        rr2.log("image", rr2.Image(rgb))
+
         detections, phrases = grounding_dino_detect(
             model, args.device, rgb, args.prompt, id_from_phrase
         )
