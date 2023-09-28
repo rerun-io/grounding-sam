@@ -9,7 +9,7 @@ import cv2
 from PIL import Image
 import numpy as np
 import requests
-import rerun.experimental as rr2
+import rerun as rr
 import torch
 import torchvision
 from cv2 import Mat
@@ -114,9 +114,9 @@ def run_segmentation(
         phrase_mask = phrase_masks[phrase]
         segmentation_img[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
         phrase_mask[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
-        rr2.log(f"image/phrases/{phrase}/segmentation", rr2.SegmentationImage(phrase_mask))
+        rr.log(f"image/phrases/{phrase}/segmentation", rr.SegmentationImage(phrase_mask))
 
-    rr2.log("image/segmentation", rr2.SegmentationImage(segmentation_img))
+    rr.log("image/segmentation", rr.SegmentationImage(segmentation_img))
 
 
 def is_url(path: str) -> bool:
