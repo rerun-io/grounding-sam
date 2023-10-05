@@ -75,8 +75,8 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
         rr.log(
             f"image/phrases/{phrase}/detections",
             rr.Boxes2D(  # boxes are XYXY format (top left, bottom right)
-                mins=boxes_filt[mask][:, :2],
-                sizes=boxes_filt[mask][:, 2:] - boxes_filt[mask][:, :2],
+                array=boxes_filt[mask].numpy(),
+                array_format=rr.Box2DFormat.XYXY,
                 class_ids=box_ids[mask].numpy(),
             ),
         )
@@ -84,8 +84,8 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
     rr.log(
         "image/detections",
         rr.Boxes2D(
-            mins=boxes_filt[:, :2],
-            sizes=boxes_filt[:, 2:] - boxes_filt[:, :2],
+            array=boxes_filt.numpy(),
+            array_format=rr.Box2DFormat.XYXY,
             class_ids=box_ids.numpy(),
         )
     )
