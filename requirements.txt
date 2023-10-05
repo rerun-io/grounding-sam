@@ -6,3 +6,4 @@ rerun-sdk
 torch
 torchvision
 tqdm
+rerun-sdk>=0.9.0

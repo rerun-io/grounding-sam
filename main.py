@@ -22,13 +22,12 @@ from segment_anything import SamPredictor
 from segment_anything.modeling import Sam
 from groundingdino.models import GroundingDINO
 
-
 def log_images_segmentation(args, model: GroundingDINO, predictor: Sam):
     id_from_phrase = {}
     for n, image_uri in enumerate(args.images):
         rr.set_time_sequence("image", n)
         image = load_image(image_uri)
-        rr.log_image("image", image)
+        rr.log("image", rr.Image(image))
 
         detections, phrases, id_from_phrase = grounding_dino_detect(
             model, args.device, image, args.prompt, id_from_phrase
@@ -60,27 +59,35 @@ def grounding_dino_detect(model, device, image, prompt, id_from_phrase):
     box_ids = torch.tensor([id_from_phrase[phrase] for phrase in box_phrases])
 
     # Make sure we have an AnnotationInfo present for every class-id used in this image
-    rr.log_annotation_context(
+    rr.log(
         "image",
-        [rr.AnnotationInfo(id=id, label=phrase)
-         for phrase, id in id_from_phrase.items()],
+        rr.AnnotationContext(
+            [
+                rr.AnnotationInfo(id=id, label=phrase)
+                for phrase, id in id_from_phrase.items()
+            ]
+        ),
         timeless=False,
     )
 
     for phrase in box_phrases:
         mask = box_ids == id_from_phrase[phrase]
-        rr.log_rects(
+        rr.log(
             f"image/phrases/{phrase}/detections",
-            rects=boxes_filt[mask].numpy(),
-            class_ids=box_ids[mask].numpy(),
-            rect_format=rr.RectFormat.XYXY,
+            rr.Boxes2D(  # boxes are XYXY format (top left, bottom right)
+                array=boxes_filt[mask].numpy(),
+                array_format=rr.Box2DFormat.XYXY,
+                class_ids=box_ids[mask].numpy(),
+            ),
         )
 
-    rr.log_rects(
+    rr.log(
         "image/detections",
-        rects=boxes_filt.numpy(),
-        class_ids=box_ids.numpy(),
-        rect_format=rr.RectFormat.XYXY,
+        rr.Boxes2D(
+            array=boxes_filt.numpy(),
+            array_format=rr.Box2DFormat.XYXY,
+            class_ids=box_ids.numpy(),
+        )
     )
 
     return boxes_filt, box_phrases
@@ -99,17 +106,14 @@ def log_video_segmentation(args, model: GroundingDINO, predictor: Sam):
         if not ret:
             break
         rr.set_time_sequence("frame", idx)
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        rgb = resize_img(rgb, 512)
-        rr.log_image("image", rgb)
 
         # clear everything, otherwise we'll see previous detection while inference runs
-        for phrase in id_from_phrase:
-            rr.log_cleared("image/segmentation")
-            rr.log_cleared("image/detections")
-            rr.log_cleared(f"image/phrases/{phrase}/segmentation")
-            rr.log_cleared(f"image/phrases/{phrase}/detections")
-        
+        rr.log("image", rr.Clear.recursive())
+
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        rgb = resize_img(rgb, 512)
+        rr.log("image", rr.Image(rgb))
+
         detections, phrases = grounding_dino_detect(
             model, args.device, rgb, args.prompt, id_from_phrase
         )

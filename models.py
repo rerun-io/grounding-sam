@@ -10,7 +10,6 @@ from PIL import Image
 import numpy as np
 import requests
 import rerun as rr
-from rerun.components.rect2d import RectFormat
 import torch
 import torchvision
 from cv2 import Mat
@@ -106,16 +105,18 @@ def run_segmentation(
 
     logging.info("Found {} masks".format(len(masks)))
 
-    segmentation_img = np.zeros((image.shape[0], image.shape[1]))
-    phrase_masks = defaultdict(lambda: np.zeros((image.shape[0], image.shape[1])))
+    segmentation_img = np.zeros((image.shape[0], image.shape[1]), dtype=int)
+    phrase_masks = defaultdict(
+        lambda: np.zeros((image.shape[0], image.shape[1]), dtype=int)
+    )
 
     for phrase, mask in zip(phrases, masks):
         phrase_mask = phrase_masks[phrase]
         segmentation_img[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
         phrase_mask[mask.squeeze().numpy(force=True)] = id_from_phrase[phrase]
-        rr.log_segmentation_image(f"image/phrases/{phrase}/segmentation", phrase_mask)
+        rr.log(f"image/phrases/{phrase}/segmentation", rr.SegmentationImage(phrase_mask))
 
-    rr.log_segmentation_image(f"image/segmentation", segmentation_img)
+    rr.log("image/segmentation", rr.SegmentationImage(segmentation_img))
 
 
 def is_url(path: str) -> bool:
